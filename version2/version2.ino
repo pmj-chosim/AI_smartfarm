@@ -48,6 +48,7 @@ String formettedTime;
 int year, month, day, hour, minute, second;
 
 FirebaseData firebaseData;
+FirebaseJsonData result;
 // Decision Pin 
 int motorPin[] = {5, 4};
 int ledPin = 0;
@@ -143,6 +144,12 @@ int predict_with_polynomial_regression(PolynomialModel model, int test_x) {
     return model.a * test_x * test_x + model.b * test_x + model.c;
 }
 
+void turnOnAllRelays() {
+    for (int i = 0; i < 2; i++) {
+        digitalWrite(motorPin[i], LOW); // Mengaktifkan relay
+    }
+    // Tambahkan kode untuk mengaktifkan relay lainnya jika diperlukan
+}
 
 //********Weather API***********//
 void getWeather() {
@@ -203,7 +210,8 @@ void getWeather() {
   client.stop();
 }
 unsigned long previousMillis = 0;
-const long interval = 5000; 
+const long interval = 20000; 
+
 
 
 void setup(){
@@ -275,33 +283,44 @@ void setup(){
     minute = timeClient.getMinutes();
     second = timeClient.getSeconds();
     writeLog("NTP Time Recall Complete");
+     turnOnAllRelays();
 }
 
 void sendDataToFirebase(byte* humidity1, byte* humidity2) {
   FirebaseJson json;
 
   for (int i = 0; i < 24; i++) {
-    json.set("/data/soilHumidity1/" + String(i), int(humidity1[i]));
-    json.set("/data/soilHumidity2/" + String(i), int(humidity2[i]));
+    json.set("/soilHumidity1/" + String(i), int(humidity1[i]));
+    json.set("/soilHumidity2/" + String(i), int(humidity2[i]));
   }
 
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
 
   if (Firebase.pushJSON(firebaseData, "/data", json)) {
     Serial.println("Data sent to Firebase!");
+   
   } else {
     Serial.println("Error sending data to Firebase");
     Serial.print("Error Reason: ");
     Serial.println(firebaseData.errorReason());
   }
-
-  Firebase.end(firebaseData);
-
   delay(5000);
 }
 
-
-
+void readDataFromFirebase() {
+  if (Firebase.get(firebaseData, "/led")) {
+    if (firebaseData.dataType() == "string") {
+      String FBStatus = firebaseData.stringData();
+      if (FBStatus == "ON") {
+        isLedOn = 0;
+        // Code to turn on the LED
+      } else if (FBStatus == "OFF") {
+        isLedOn = 1;
+        // Code to turn off the LED
+      }
+    }
+  }
+}
 void loop() {
   unsigned long currentMillis = millis();
   // put your main code here, to run repeatedly:
@@ -317,16 +336,15 @@ void loop() {
     hour = timeClient.getHours();
     minute = timeClient.getMinutes();
     second = timeClient.getSeconds();
-
+    
     year = ptm->tm_year+1900; // It adds 1900 to match the current year.
     month = ptm->tm_mon+1;
     day = ptm->tm_mday;
-
     // GET REQUEST
     String req = client.readStringUntil('\r');
     Serial.println(client.readStringUntil('\r'));
     client.flush();
-
+    readDataFromFirebase();
     if(req.indexOf("led/on") != -1){
         isLedOn = 0;
         writeLog("LED on due to user");
@@ -485,11 +503,8 @@ void loop() {
       }
     //*******************************************//
     }
-    
-
     // Checking the temperature and humidity
     int updateRht = rht.update(); // On via RHT, returns 1 if humidity is called
-
     //**************************************/
     if(updateRht == 1){
         humidity = rht.humidity();
@@ -510,10 +525,12 @@ void loop() {
         writeLog("[Pot1] Current moisture hour: " + String(hour) + ", " + String(soilPercents[0]) + " EEPROM 기록");
         writeLog("[Pot2] Current moisture hour: " + String(hour) + ", " + String(soilPercents[1]) + " EEPROM 기록");
 
- if (currentMillis - previousMillis >= interval) {
-    previousMillis = currentMillis;
-    sendDataToFirebase(soilHumidity1, soilHumidity2);
-  }
+if (currentMillis - previousMillis >= interval) {
+  previousMillis = currentMillis;
+  sendDataToFirebase(soilHumidity1, soilHumidity2);
+}
+
+
     }
     //******Weather******//
     getWeather();
@@ -532,7 +549,6 @@ void loop() {
     client.println("<script src=\"https://cdn.tailwindcss.com\"></script>");
     client.println("<title>Smart Farm</title>"); // 웹 서버 페이지 제목 설정
     client.println("</head>");
-
     // body 태그 선언부
     client.println("<body>");
     client.println("<div class=\"text-8xl p-8 font-bold\"><a href=\"/\">TeamA Farm</a></div>");
@@ -542,7 +558,7 @@ void loop() {
 
      // LED >> 수정했음! 반영 바람
     client.print("<span class=\"text-2xl\">LED: ");
-    !isLedOn
+    !isLedOn //for LED
     ? client.println("<span class=\"text-2xl font-bold\">OFF</span>")
     : client.println("<span class=\"text-2xl font-bold text-green-400\">ON</span>");
     client.println("</span>");
@@ -562,9 +578,12 @@ void loop() {
     : client.println("<span class=\"text-2xl font-bold text-green-400\">ON</span>");
     client.println("</span>");
     client.println("<div class=\"flex\">\
-                    <div class=\"inline-flex shadow-md hover:shadow-lg focus:shadow-lg\" role=\"group\">\
-                        <button type=\"button\" class=\"rounded-l inline-block px-6 py-2.5 bg-blue-600 text-white font-medium text-xs leading-tight uppercase hover:bg-blue-700 focus:bg-blue-700 focus:outline-none focus:ring-0 active:bg-blue-800 transition duration-150 ease-in-out\" onclick=\"location.href='/motor/sub/on'\">On</button>\
-                        <button type=\"button\" class=\" rounded-r inline-block px-6 py-2.5 bg-blue-600 text-white font-medium text-xs leading-tight uppercase hover:bg-blue-700 focus:bg-blue-700 focus:outline-none focus:ring-0 active:bg-blue-800 transition duration-150 ease-in-out\" onclick=\"location.href='/motor/sub/off'\">Off</button></div></div>");
+    <div class=\"inline-flex shadow-md hover:shadow-lg focus:shadow-lg\" role=\"group\">\
+        <button type=\"button\" class=\"rounded-l inline-block px-6 py-2.5 bg-blue-600 text-white font-medium text-xs leading-tight uppercase hover:bg-blue-700 focus:bg-blue-700 focus:outline-none focus:ring-0 active:bg-blue-800 transition duration-150 ease-in-out\" onclick=\"location.href='/led/on'\">On</button>\
+        <button type=\"button\" class=\"rounded-r inline-block px-6 py-2.5 bg-blue-600 text-white font-medium text-xs leading-tight uppercase hover:bg-blue-700 focus:bg-blue-700 focus:outline-none focus:ring-0 active:bg-blue-800 transition duration-150 ease-in-out\" onclick=\"location.href='/led/off'\">Off</button>\
+    </div>\
+</div>");
+
     client.println("</div>"); // <div class="basis-1/2 relative">
 
     // 온,습도

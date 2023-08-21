@@ -42,8 +42,9 @@ const char* city = "1643084"; // Zakarta city Code
 const int r1 = D1;
 const int r2 = D2;
 const int r3 = D3;
+const int r4 = D4;
 
-const char* serverIP = "10.10.183.134";
+const char* serverIP = "192.168.143.177";
 const int serverPort = 5000;
 String formettedTime;
 int year, month, day, hour, minute, second;
@@ -111,36 +112,6 @@ void writeLog(String text){
     logcount += 1;
 }
 
-// **********Multinomial regression model generation and training functions**********
-void create_and_train_polynomial_regression(int x[], int y[], int n, PolynomialModel *model) {//n => 배열에 들어있는 원소의 개수
-    int sum_x = 0, sum_x2 = 0, sum_x3 = 0, sum_x4 = 0;
-    int sum_y = 0, sum_xy = 0, sum_x2y = 0;
-
-    for (int i = 0; i < n; i++) {
-        int x2 = x[i] * x[i];
-        int x3 = x2 * x[i];
-        int x4 = x3 * x[i];
-        
-        sum_x += x[i];
-        sum_x2 += x2;
-        sum_x3 += x3;
-        sum_x4 += x4;
-        
-        sum_y += y[i];
-        sum_xy += x[i] * y[i];
-        sum_x2y += x2 * y[i];
-    }
-
-    int denominator = n * sum_x2 * sum_x4 - n * sum_x3 * sum_x3 + sum_x * sum_x * sum_x2;
-    model->a = (sum_y * sum_x2 * sum_x4 - sum_xy * sum_x3 * sum_x3 + sum_x * sum_x2y * sum_x2) / denominator;
-    model->b = (n * sum_xy * sum_x4 - sum_y * sum_x3 * sum_x3 + sum_x * sum_x2y * sum_x) / denominator;
-    model->c = (n * sum_x2y * sum_x2 - sum_xy * sum_x3 * sum_x + sum_x * sum_y * sum_x4) / denominator;
-}
-
-//********** Predictive function with quadratic polynomial regression model **********
-int predict_with_polynomial_regression(PolynomialModel model, int test_x) {
-    return model.a * test_x * test_x + model.b * test_x + model.c;
-}
 
 
 //********Weather API***********//
@@ -223,6 +194,7 @@ void setup(){
  pinMode(r1, OUTPUT);
   pinMode(r2, OUTPUT);
   pinMode(r3, OUTPUT);
+  pinMode(r4, OUTPUT);
     // Get Humidity Values
     for(int i = 0; i < EEPROM.length(); i++){
         if(EEPROM.read(i) > 100) continue; // The initial value of the initialized EEPROM was 255.
@@ -367,9 +339,9 @@ String readLedStatusFromFirebase() {
     String ledStatus = firebaseData.stringData();
     Serial.println("LED status read from Firebase: " + ledStatus);
     if(ledStatus == "on"){
-         digitalWrite(r3, LOW);
+         digitalWrite(r2, LOW);
     }else{
-         digitalWrite(r3, HIGH);
+         digitalWrite(r2, HIGH);
     }
     return ledStatus;
   } else {
@@ -389,11 +361,10 @@ String readLedStatusMotorFromFirebase() {
     String motorStatus = firebaseData.stringData();
     Serial.println("Motor status read from Firebase: " + motorStatus);
     if(motorStatus == "on"){
-        digitalWrite(r2, LOW);
-          digitalWrite(r1, LOW);
+        Serial.println("motor r4 is running");
+          digitalWrite(r4, LOW);
     }else{
-digitalWrite(r2, HIGH);
-          digitalWrite(r1, HIGH);
+digitalWrite(r4, HIGH);
     }
     return motorStatus;
   } else {
@@ -405,6 +376,50 @@ digitalWrite(r2, HIGH);
 }
 
 
+float readMotorStatusFromFirebase() {
+  // Read data from Firebase
+  if (Firebase.getString(firebaseData, "/aidata/y1_pred_plus/0")) {
+    String motorStatusString = firebaseData.stringData();
+    float motorStatus = motorStatusString.toFloat(); // Convert to float
+    Serial.println("Motor status read from Firebase: " + motorStatusString);
+
+    if (motorStatus < 50.0) { // Check if the value is less than 50
+      digitalWrite(r1, LOW); // Set r1 HIGH
+    } else {
+      digitalWrite(r1, HIGH); // Set r1 LOW
+    }
+
+    return motorStatus;
+  } else {
+    Serial.println("Error reading Motor status from Firebase.");
+    Serial.print("Error Reason: ");
+    Serial.println(firebaseData.errorReason());
+    return 0.0; // Return a default value in case of an error
+  }
+}
+
+float readMotor2StatusFromFirebase() {
+  // Read data from Firebase
+  if (Firebase.getString(firebaseData, "/aidata/y2_pred_plus/0")) {
+    String motorStatusString = firebaseData.stringData();
+    float motorStatus = motorStatusString.toFloat(); // Convert to float
+    Serial.println("Motor status read from Firebase: " + motorStatusString);
+
+    if (motorStatus < 50.0) { // Check if the value is less than 50
+      digitalWrite(r3, LOW); // Set r1 HIGH
+    } else {
+      digitalWrite(r3, HIGH); // Set r1 LOW
+    }
+
+    return motorStatus;
+  } else {
+    Serial.println("Error reading Motor status from Firebase.");
+    Serial.print("Error Reason: ");
+    Serial.println(firebaseData.errorReason());
+    return 0.0; // Return a default value in case of an error
+  }
+}
+
 void loop() {
   String ledData =  readLedStatusFromFirebase();
   Serial.println("Current LED data: " + ledData);
@@ -414,7 +429,8 @@ String motorData =  readLedStatusMotorFromFirebase();
   // put your main code here, to run repeatedly:
   delay(50);
     WiFiClient client = server.available();
-
+readMotorStatusFromFirebase();
+readMotor2StatusFromFirebase();
     timeClient.update(); // Update Time
 
     time_t epochTime = timeClient.getEpochTime();
@@ -538,7 +554,9 @@ DynamicJsonDocument dataDoc(1024);  // JSON document created
   http.begin(client, serverIP, serverPort, "/postjson");
   http.addHeader("Content-Type", "application/json");
   String jsonString;
-
+  
+  serializeJson(dataDoc, jsonString);
+  Serial.println(jsonString);
   int httpCode = http.POST(jsonString);
   
   DynamicJsonDocument predDoc(1024);
@@ -580,20 +598,23 @@ DynamicJsonDocument dataDoc(1024);  // JSON document created
     for (int i = 0; i < 2; i++) {
       if (prediction[i] < 50) {
         writeLog("pot" + String(i+1) + "mositure prediction value. " + String(prediction[i]) +" so " + String(i + 1) + "motor on");
-       digitalWrite(r2, LOW);
-          digitalWrite(r1, LOW);
+        if(i == 0){
+          
+        }else{
+
+        }
       } else {
         if (!motorOn[i]) writeLog("pot" + String(i+1) + "moisture predicition value." + String(prediction[i]) +" so " + String(i + 1) + "motor off");
-        digitalWrite(r2, LOW);
-          digitalWrite(r1, LOW);  // 모터꺼짐
+        if(i == 0){
+          
+        }else{
+          
+        }
       }
       digitalWrite(motorPin[i], motorOn[i]);
 }
     // (new code end)
   }
-
-  serializeJson(dataDoc, jsonString);
-  Serial.println(jsonString);
     /*******Save to the list of moisture measurements every 15 minutes (test: 1 minute)*******/
     if(timeClient.getMinutes() % 1 == 0 && timeClient.getSeconds() <= 10){
       if(cnt < 24){
@@ -626,45 +647,13 @@ DynamicJsonDocument dataDoc(1024);  // JSON document created
         writeLog("humForPred2[" + String(i) + "] : " + String(humForPred2[i]));
       }
 
-      PolynomialModel model1; //Create Coef Storing Structures
-      create_and_train_polynomial_regression(x, humForPred1, cnt, &model1);//Model creation and training
-      writeLog("x2 of Pot 1: " + String(model1.a) + ", x1: " + String(model1.b) + ", x0: " + String(model1.c));
-      
-      //prediction test
-      int test_x1 = 0;
-      if(cnt < 25) {test_x1 = cnt + 1;}
-      else {test_x1 = 25;}
-      prediction1 = predict_with_polynomial_regression(model1, test_x1);
-      writeLog("Pot 1 Prediction at x = " + String(test_x1) + ": " + prediction1); //
-
-      
-      // //*********Prediction for Pot 2*********//
-      PolynomialModel model2; // Create Coef Storing Structures
-      create_and_train_polynomial_regression(x, humForPred2, cnt, &model2);//Model creation and training
-      writeLog("x2 of Pot 2: " + String(model2.a) + ", x1: " + String(model2.b) + ", x0: " + String(model2.c));
-
       //prediction test
       int test_x2 = 0;
       if(cnt < 25) {test_x2 = cnt + 1;}
       else {test_x2 = 25;}
-      prediction2 = predict_with_polynomial_regression(model2, test_x2);
+     
       writeLog("[Pot2] Prediction at x = " + String(test_x2) + ": " + prediction2); //
  
-
-      //*********Morton motion using predicted values*********//
-      byte prediction[2] = {prediction1, prediction2};
-      for(int i = 0; i < 2; i++){
-        if(prediction[i] < 40){
-          writeLog("물주는값으로 인해 " + String(i+1) + "번 모터 켜짐");
-        }
-        else{
-          if(!motorOn[i]) writeLog("물주는값으로 인해 " + String(i+1) + "번 모터 꺼짐");
-            motorOn[i] = 1; // 모터꺼짐
-        }
-        //digitalWrite(motorPin[i], motorOn[i]);
-      }
-     
-    //*******************************************//
     }
     
 
@@ -694,7 +683,6 @@ DynamicJsonDocument dataDoc(1024);  // JSON document created
  if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
     sendDataToFirebase(soilHumidity1, soilHumidity2);
-     sendPredictionToFirebase(prediction1, prediction2);
      sendRhtToFirebase(tempC, humidity);
      sendmoisToFirebase(soilPercents[0], soilPercents[1]);
   }

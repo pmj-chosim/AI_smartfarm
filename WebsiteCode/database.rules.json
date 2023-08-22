@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "data": {
+      "-Nc1weZzHxBEM5laGWqx": {
+        "data": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    }
+  }
+}

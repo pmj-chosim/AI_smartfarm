@@ -52,7 +52,7 @@ jobs:
 
       - name: Install Flask Dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -r .github/workflows/requirements.txt
         working-directory: ./flask(ai server)code.py  # Flask 앱이 있는 디렉토리로 변경
 
       - name: Build and Run Flask Server

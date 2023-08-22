@@ -1,0 +1,65 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main 
+    pull_request:
+   	 types: [opened, synchronize, reopened, closed]
+    	branches:
+     	 - main
+
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14' 
+
+      - name: Install Firebase CLI
+        run: |
+          npm install -g firebase-tools
+          firebase login:ci --no-localhost --interactive
+        env:
+          FIREBASE_TOKEN: ${{secrets.FIREBASE_TOKEN}} 
+          # Firebase 토큰은 GitHub 레포지토리 Secrets에 설정해야 함
+
+      - name: Deploy to Firebase
+        run: |
+         var firebaseConfig = {
+         apiKey: "${{secrets.FIREBASE_API TOKEN}}",
+         authDomain: "knupolije1.firebaseapp.com",
+         databaseURL: "https://knupolije1-default-rtdb.firebaseio.com",
+         projectId: "knupolije1",
+         storageBucket: "knupolije1.appspot.com",
+         messagingSenderId: "${{SENDDATAID}}",
+         appId: "${{FIREBASE_API_ID}}",
+         measurementId: "${{Measurement_ID}}"
+      };
+      firebase.initializeApp(firebaseConfig);
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11' 
+
+      - name: Install Flask Dependencies
+        run: |
+          pip install -r requirements.txt
+        working-directory: ./flask(ai server)code.py  # Flask 앱이 있는 디렉토리로 변경
+
+      - name: Build and Run Flask Server
+        run: |
+          flask run --host=0.0.0.0 --port=5000
+        working-directory: ./flask(ai server)code.py  # Flask 앱이 있는 디렉토리로 변경
+
+      - name: Build Arduino C Code
+        run: |
+          Arduinocode.ino

@@ -60,6 +60,3 @@ jobs:
           flask run --host=0.0.0.0 --port=5000
         working-directory: ./flask(ai server)code.py  # Flask 앱이 있는 디렉토리로 변경
 
-      - name: Build Arduino C Code
-        run: |
-          Arduinocode.ino
